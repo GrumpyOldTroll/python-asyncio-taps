@@ -1,8 +1,10 @@
 import asyncio
+import socket
 import json
 import sys
 import ssl
 from .endpoint import LocalEndpoint, RemoteEndpoint
+from .multicast import join_ssm, join_asm
 from .transportProperties import *
 from .utility import *
 color = "green"
@@ -384,10 +386,24 @@ class DatagramHandler(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        return
+        join_type = self.preconnection.local_endpoint.join_type
+        if join_type is not None:
+            # jake 2019-05-02: either way, we need the socket, the
+            # interface index to send the join on, and the group address
+            sock = self.transport.get_extra_info('socket')
+            interface = self.preconnection.local_endpoint.interface
+            group_addr = self.preconnection.local_endpoint.address
+
+            if_idx = socket.if_nametoindex(interface)
+            if join_type == "source-specific":
+                source_addr = self.preconnection.remote_endpoint.address
+                print_time('Joining %s->%s on %s' % (source_addr, group_addr, interface))
+                join_ssm(sock, source_addr, group_addr, if_idx)
+            elif join_type == "any-source":
+                join_asm(sock, group_addr, if_idx)
 
     def datagram_received(self, data, addr):
-        print("Receied new dgram")
+        print("Received new datagram")
         if addr in self.remotes:
             self.remotes[addr].datagram_received(data, addr)
             return

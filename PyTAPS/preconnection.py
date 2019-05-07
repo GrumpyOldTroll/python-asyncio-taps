@@ -1,5 +1,6 @@
 import asyncio
 import ssl
+import ipaddress
 from .yang_validate import validate, convert, YangException, YANG_FMT_XML, YANG_FMT_JSON
 import xml.etree.ElementTree as ET
 from .connection import Connection, DatagramHandler
@@ -46,6 +47,7 @@ class Preconnection:
                 self.transport_properties = transport_properties
                 self.security_parameters = security_parameters
                 self.security_context = None
+                self.multicast_type = None
                 self.loop = event_loop
 
                 # Callbacks of the appliction
@@ -100,12 +102,15 @@ class Preconnection:
             interface_ref = node.findtext('taps:ifref', namespaces=ns)
             local_address = node.findtext('taps:local-address', namespaces=ns)
             local_port = node.findtext('taps:local-port', namespaces=ns)
+            join_type = node.findtext('taps:multicast-subscription', namespaces=ns)
             if interface_ref:
                 lp.with_interface(interface_ref)
             if local_address:
                 lp.with_address(local_address)
             if local_port:
                 lp.with_port(local_port)
+            if join_type:
+                lp.with_join(join_type)
             break
 
         rp = None
@@ -270,10 +275,32 @@ class Preconnection:
         try:
             if candidate_set[0][0] == 'udp':
                 self.protocol = 'udp'
+                # jake 2019-05-04: force multicast to listen on INADDR_ANY as workaround
+                if self.local_endpoint.join_type:
+                    loc_addr = ipaddress.ip_address(self.local_endpoint.address)
+                    if loc_addr.version == 4:
+                        any_addr = '0.0.0.0'
+                    else:
+                        any_addr = '::'
+                    local_addr=(any_addr,
+                                self.local_endpoint.port)
+                    reuse = True
+                else:
+                    reuse = None
+                    local_addr=(self.local_endpoint.address,
+                                self.local_endpoint.port)
+                # multicast listener has to resolve remote address if present and
+                # ssm - jake 2019-05-02
+                if self.local_endpoint.join_type == "source-specific":
+                    # Resolve address
+                    remote_info = await self.loop.getaddrinfo(
+                        self.remote_endpoint.host_name, self.remote_endpoint.port)
+                    self.remote_endpoint.address = remote_info[0][4][0]
+
+                print_time('listening udp on %s' % (local_addr,))
                 await self.loop.create_datagram_endpoint(
                                 lambda: DatagramHandler(self),
-                                local_addr=(self.local_endpoint.interface,
-                                            self.local_endpoint.port))
+                                local_addr=local_addr, reuse_port=reuse)
             elif candidate_set[0][0] == 'tcp':
                 self.protocol = 'tcp'
                 server = await self.loop.create_server(
@@ -281,8 +308,8 @@ class Preconnection:
                                 self.local_endpoint.interface,
                                 self.local_endpoint.port,
                                 ssl=self.security_context)
-        except:
-            print_time("Listen Error occured.", color)
+        except Exception as ex:
+            print_time("Listen Error occured.: %s" % (ex), color)
             if self.listen_error:
                 self.loop.create_task(self.listen_error())
 
@@ -316,30 +343,35 @@ class Preconnection:
         # Iterate over all available protocols and over all properties
         for protocol in available_protocols:
             for transport_property in self.transport_properties.properties:
+                match = protocol.get(transport_property, False)
+                protName = protocol["name"]
+                if protName == transport_property:
+                    # jake 2019-05-02: protocol name as auto-property? or should
+                    # these be added to the set of properties?
+                    # also: is default-false reasonable and not everything has to
+                    # be in every protocol profile?
+                    match = True
+                preference = self.transport_properties.properties[transport_property]
                 # If a protocol has a prohibited property remove it
-                if (self.transport_properties.properties[transport_property]
-                        is PreferenceLevel.PROHIBIT):
-                    if (protocol[transport_property] is True and
-                            protocol["name"] in candidate_protocols):
-                        del candidate_protocols[protocol["name"]]
+                if preference is PreferenceLevel.PROHIBIT:
+                    if match is True and protName in candidate_protocols:
+                        print_time('removing %s (prohibited on %s)' % (protName, transport_property))
+                        del candidate_protocols[protName]
                 # If a protocol doesnt have a required property remove it
-                if (self.transport_properties.properties[transport_property]
-                        is PreferenceLevel.REQUIRE):
-                    if (protocol[transport_property] is False and
-                            protocol["name"] in candidate_protocols):
-                        del candidate_protocols[protocol["name"]]
+                if preference is PreferenceLevel.REQUIRE:
+                    if match is False and protName in candidate_protocols:
+                        print_time('removing %s (on required %s)' % (protName, transport_property))
+                        del candidate_protocols[protName]
                 # Count how many PREFER properties each protocol has
-                if (self.transport_properties.properties[transport_property]
-                        is PreferenceLevel.PREFER):
-                    if (protocol[transport_property] is True and
-                            protocol["name"] in candidate_protocols):
-                        candidate_protocols[protocol["name"]][0] += 1
+                if preference is PreferenceLevel.PREFER:
+                    if match is True and protName in candidate_protocols:
+                        print_time('liking %s (on preferred %s)' % (protName, transport_property))
+                        candidate_protocols[protName][0] += 1
                 # Count how many AVOID properties each protocol has
-                if (self.transport_properties.properties[transport_property]
-                        is PreferenceLevel.AVOID):
-                    if (protocol[transport_property] is True and
-                            protocol["name"] in candidate_protocols):
-                        candidate_protocols[protocol["name"]][1] -= 1
+                if preference is PreferenceLevel.AVOID:
+                    if match is True and protName in candidate_protocols:
+                        print_time('disliking %s (on avoided %s)' % (protName, transport_property))
+                        candidate_protocols[protName][1] -= 1
 
         # Sort candidates by number of PREFERs and then by AVOIDs on ties
         sorted_candidates = sorted(candidate_protocols.items(),

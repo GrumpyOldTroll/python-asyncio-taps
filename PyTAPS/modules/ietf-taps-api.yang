@@ -83,11 +83,11 @@ module ietf-taps-api {
     description "Base identity for transport properties";
   }
 
-  identity reliable {
+  identity reliability {
     base transport-property-type;
     description "Reliable Transport";
   }
-  identity per-message-reliable {
+  identity per-message-reliability {
     base transport-property-type;
     description "Per-message Reliable Transport";
   }
@@ -110,6 +110,11 @@ module ietf-taps-api {
         TBD: draft-ietf-taps-interface-02#section-5.2.6 seems to
              indicate some parameters are in order with this type,
              not sure exactly what it should look like? Use case?";
+  }
+  identity local-interface-selection {
+    base transport-property-type;
+    description "Interface Instance or Type
+        TBD: should this be a local-endpoint-property?";
   }
   identity congestion-control {
     base transport-property-type;
@@ -272,7 +277,7 @@ module ietf-taps-api {
 
       leaf id {
         type string;
-        description "id of the local endpoint within the yang instance";
+        description "id of the local endpoint";
       }
 
       leaf local-address {
@@ -313,6 +318,14 @@ module ietf-taps-api {
         }
         uses security-credentials;
       }
+
+      leaf multicast-subscription {
+        type enumeration {
+          enum "source-specific";
+          enum "any-source";
+        }
+        description "type of multicast join";
+      }
     }
 
     list remote-endpoints {
@@ -321,7 +334,7 @@ module ietf-taps-api {
 
       leaf id {
         type string;
-        description "id of the remote endpoint within the yang instance";
+        description "id of the remote endpoint";
       }
 
       leaf remote-host {
@@ -333,16 +346,30 @@ module ietf-taps-api {
         type inet:port-number;
         description "port value of an endpoint port";
       }
+
+      leaf remote-distance {
+        type union {
+          type uint8 {
+            range "1..max";
+          }
+          type enumeration {
+            enum "local";
+            enum "global";
+          }
+        }
+        description "distance (ttl) for packet transport";
+      }
     }
 
     list transport-properties {
       key "type preference";
-      description "list of transport property constraints.";
+      description "list of transport property constraints";
 
       leaf type {
         type identityref {
           base transport-property-type;
         }
+        description "type of the transport property";
       }
 
       leaf preference {
@@ -351,6 +378,17 @@ module ietf-taps-api {
            less verbose config file.
            default require; */
         description "preference level for the property";
+      }
+
+      leaf-list iftype {
+        when "derived-from-or-self(../type,
+            'taps:local-interface-selection')";
+        type identityref {
+          base "ianaift:iana-interface-type";
+        }
+        description "interface type constraint for local
+          interface selection";
+        reference "RFC 7224 Section 2";
       }
     }
 

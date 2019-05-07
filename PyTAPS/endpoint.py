@@ -8,6 +8,7 @@ class LocalEndpoint:
         self.interface = None
         self.port = None
         self.address = None
+        self.multicast_join = None
 
     def with_interface(self, interface):
         self.interface = interface
@@ -17,6 +18,9 @@ class LocalEndpoint:
 
     def with_port(self, portNumber):
         self.port = portNumber
+
+    def with_join(self, join_type):
+        self.join_type = join_type
 
 
 class RemoteEndpoint:

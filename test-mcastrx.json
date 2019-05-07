@@ -1,0 +1,37 @@
+{
+  "ietf-taps-api:preconnection":{
+    "local-endpoints":[
+      {
+        "id":"1",
+        "local-address":"232.1.1.1",
+        "local-port":"5001",
+        "multicast-subscription":"source-specific",
+        "ifref":"docker0"
+      }
+    ],
+    "remote-endpoints":[
+      {
+        "id":"1",
+        "remote-host":"23.212.185.4"
+      }
+    ],
+    "transport-properties":[
+      {
+        "type":"udp",
+        "preference":"require"
+      },
+      {
+        "type":"preserve-order",
+        "preference":"ignore"
+      },
+      {
+        "type":"congestion-control",
+        "preference":"ignore"
+      },
+      {
+        "type":"reliability",
+        "preference":"ignore"
+      }
+    ]
+  }
+}
