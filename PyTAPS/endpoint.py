@@ -8,7 +8,7 @@ class LocalEndpoint:
         self.interface = None
         self.port = None
         self.address = None
-        self.multicast_join = None
+        self.join_type = None
 
     def with_interface(self, interface):
         self.interface = interface

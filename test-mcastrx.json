@@ -5,8 +5,7 @@
         "id":"1",
         "local-address":"232.1.1.1",
         "local-port":"5001",
-        "multicast-subscription":"source-specific",
-        "ifref":"docker0"
+        "multicast-subscription":"source-specific"
       }
     ],
     "remote-endpoints":[
@@ -15,23 +14,17 @@
         "remote-host":"23.212.185.4"
       }
     ],
-    "transport-properties":[
-      {
-        "type":"udp",
-        "preference":"require"
-      },
-      {
-        "type":"preserve-order",
-        "preference":"ignore"
-      },
-      {
-        "type":"congestion-control",
-        "preference":"ignore"
-      },
-      {
-        "type":"reliability",
-        "preference":"ignore"
-      }
-    ]
+    "transport-properties": {
+      "congestion-control":"ignore",
+      "reliability":"ignore",
+      "preserve-order":"ignore",
+      "direction":"unidirection-receive",
+      "interface":[
+        {
+          "preference":"require",
+          "value":"docker0"
+        }
+      ]
+    }
   }
 }

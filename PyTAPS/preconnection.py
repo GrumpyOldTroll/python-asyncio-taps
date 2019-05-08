@@ -98,13 +98,9 @@ class Preconnection:
         for node in precon.findall('taps:local-endpoints', namespaces=ns):
             if not lp:
                 lp = LocalEndpoint()
-            # TBD: jake 2019-05-02: mapping from ifref to interface name?
-            interface_ref = node.findtext('taps:ifref', namespaces=ns)
             local_address = node.findtext('taps:local-address', namespaces=ns)
             local_port = node.findtext('taps:local-port', namespaces=ns)
             join_type = node.findtext('taps:multicast-subscription', namespaces=ns)
-            if interface_ref:
-                lp.with_interface(interface_ref)
             if local_address:
                 lp.with_address(local_address)
             if local_port:
@@ -149,15 +145,19 @@ class Preconnection:
             }
             stupid_xml_prefix = '{' + ns['taps'] + '}'
             for node in transport:
+                prop_name = str(node.tag)
+                if prop_name.startswith(stupid_xml_prefix):
+                    prop_name = prop_name[len(stupid_xml_prefix):]
                 if node.text in fn_mapping:
                     fn = fn_mapping.get(node.text)
-                    prop_name = str(node.tag)
-                    if prop_name.startswith(stupid_xml_prefix):
-                        prop_name = prop_name[len(stupid_xml_prefix):]
                     fn(tp, prop_name)
-                else:
-                    # TBD jake 2019-05-07: interface name/type, pvd
-                    pass
+                elif prop_name == 'interface':
+                    # TBD jake 2019-05-07: support more than require...
+                    pref = node.find('taps:preference', namespaces=ns).text
+                    val = node.find('taps:value', namespaces=ns).text
+                    if pref == 'require':
+                        lp.with_interface(val)
+                # TBD jake 2019-05-07: add pvd?
 
         return Preconnection(remote_endpoint=rp,
                 local_endpoint=lp,
